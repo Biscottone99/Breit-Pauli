@@ -1,0 +1,16 @@
+4	!nsiti
+5.0	!lenght
+0.6	!t-hopping
+T	!PPPflag
+F	!hubbardflag
+N	!hoppingflag
+F	!SOCflag
+F	!SOCtot
+F	!SOCzflag
+F	!socmono
+2	!multiply
+T	!GSflag T=si GS F= no GS
+6.d0	-3.9d0  1
+6.d0	-0.1d0	1
+6.d0	+0.2d0	1
+6.d0	+4.1d0	1
