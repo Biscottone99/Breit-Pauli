@@ -1,17 +1,16 @@
 program red2
   implicit none
   integer a,b,c,d,e,i,j,k,ii,jj,kk,iii,jjj,kkk,dim,conta,info,&
-       lwork,nt,dimsq,ab,cd,nkrylov,it, nsiti, isiti, nso, qqq, number_operator
+       lwork,nt,dimsq,ab,cd,nkrylov,it, nsiti, isiti, nso, qqq, number_operator, ia
   double precision pi,temp,hbar,kb,kbt,norm,gamma,dt,time, eta, cutoff, pstreshold, base
-  double precision, allocatable :: w(:),work(:),spectral(:,:),bedistr(:,:),  num(:,:)
+  double precision, allocatable :: w(:),work(:),spectral(:,:),bedistr(:,:)
   complex*16:: imag,trace,overlap,entime, muxtime, muytime, muztime, omega, spinpoltime, &
        sdatime, sdb1time, sdb2time, sddtime, numatime, numdtime, numb1time, numb2time
   complex*16, allocatable :: psi0(:),denmat(:,:),redfield(:,:,:,:),denvec(:),&
-       lmat(:,:), mux(:,:), muy(:,:), muz(:,:),  numtime(:),numa(:,:), numd(:,:), spinpol(:,:), numb1(:,:), &
-       numb2(:,:), operator_1(:,:), operator_2(:,:), operator_3(:,:), operator_4(:,:)
+       lmat(:,:), mux(:,:), muy(:,:), muz(:,:),  numtime(:),num(:,:,:), spinpol(:,:), &
+       operator_1(:,:), operator_2(:,:), operator_3(:,:), operator_4(:,:), local_numtime(:)
   logical:: psflag, blflag, gsflag
   character(1)::spectralflag
-
 !!! global parameters
   hbar = 6.582119569d-16 !eV*s
   hbar = hbar * 1e15 !eV*fs
@@ -34,7 +33,6 @@ program red2
   read(1,*) spectralflag
   read(1,*) number_operator
   close(1)
-
   kbt = kb*temp !eV
 
 !!! end global parameters
@@ -50,60 +48,55 @@ program red2
 !!! end system parameters
 
 !!! reading the operators
-  allocate(w(dim), mux(dim,dim), muy(dim,dim), muz(dim,dim),psi0(dim), numa(dim,dim), numd(dim,dim))
-  allocate(numb1(dim,dim), numb2(dim,dim), spinpol(dim,dim))
+  allocate(w(dim), mux(dim,dim), muy(dim,dim), muz(dim,dim),psi0(dim))
+  allocate(num(dim,dim,nso), spinpol(dim,dim))
   if(number_operator.eq.1)allocate(operator_1(dim,dim))
   if(number_operator.eq.2)allocate(operator_1(dim,dim), operator_2(dim,dim))
   if(number_operator.eq.3)allocate(operator_1(dim,dim), operator_2(dim,dim),operator_3(dim,dim))
   if(number_operator.eq.4)allocate(operator_1(dim,dim), operator_2(dim,dim),operator_3(dim,dim),operator_4(dim,dim))
-  open(1, file='../input-red/numa.bin', form="unformatted")
-  read(1) numa
-  close(1)
-  open(1, file='../input-red/numd.bin', form="unformatted")
-  read(1) numd
-  close(1)
+
+  w = 0d0
+  psi0 = 0d0
+  spinpol = 0d0
+  operator_1 = 0d0
   open(1, file='../input-red/eigen.bin', form="unformatted")
   read(1) w
   close(1)
+
   open(1, file='../input-red/psi0.bin', form="unformatted")
   read(1) psi0
   close(1)
   open(1, file='../input-red/spin-density.bin', form="unformatted")
   read(1) spinpol
   close(1)
-  open(1, file='../input-red/numb1.bin', form="unformatted")
-  read(1) numb1
-  close(1)
-  open(1, file='../input-red/numb2.bin', form="unformatted")
-  read(1) numb2
-  close(1)
   open(1, file='../input-red/op1.bin', form="unformatted")
   read(1) operator_1
   close(1)
   if(number_operator.ge.2)then
+     operator_2 = 0d0
      open(1, file='../input-red/op2.bin', form="unformatted")
      read(1) operator_2
      close(1)
   endif
   if(number_operator.ge.3)then
+     operator_3 = 0d0
      open(1, file='../input-red/op3.bin', form="unformatted")
      read(1) operator_3
      close(1)
   endif
   if(number_operator.ge.4)then
+     operator_4 = 0d0
      open(1, file='../input-red/op4.bin', form="unformatted")
      read(1) operator_4
      close(1)
   endif
-
+  num = 0d0
+  open(1, file='../input-red/num.bin', form="unformatted")
+  read(1) num
+  close(1)
 !!! end reading operators
 
-  do i = 1, dim
-     do j = 1, dim
-        write(199999,*) i, j, numa(i,j)
-     enddo
-  enddo
-  stop
+
 
 !!! preparing the initial state
   !normalization
@@ -317,7 +310,24 @@ program red2
   !    end do
 
 
-  
+  !==================================================
+  allocate(numtime(nso),local_numtime(dim))
+!!$  entime = (0.d0, 0.d0)
+!!$  spinpoltime= (0.d0, 0.d0)
+!!$  numtime = (0.d0, 0.d0)
+!!$ 
+!!$  do a = 1, dim
+!!$     entime = entime + denmat(a,a) * w(a)
+!!$     spinpoltime = spinpoltime + denmat(a,a) * spinpol(a, a)
+!!$  end do
+!!$
+!!$  do a = 1, dim
+!!$     do b = 1, nso
+!!$        numtime(b) =  numtime(b) +  denmat(a,a) * num(a,a,b)
+!!$     enddo
+!!$  enddo
+  !calcolo proprietà a t=0
+
 !==================================================
 
   deallocate(redfield,denmat)
@@ -328,10 +338,11 @@ program red2
   open(991,file='trace.dat')
   open(992,file='pop_evolution.dat')
   open(993,file='properties.dat')
-  allocate(numtime(nso))
-  time = 0.d0
-  do it = 1,nt
+  !write(993,'(<1>(f15.5,2x),<nso+2>(f20.16,2x))') time,real(entime), real(spinpoltime), (real(numtime(i)), i = 1, nso)
 
+  time = 0.d0
+
+  do it = 1,nt
      call arnoldi(denvec,lmat,dimsq,nkrylov,dt)
 
 !!! compute trace
@@ -351,34 +362,55 @@ program red2
 !!! compute properties
      entime = (0.d0, 0.d0)
      spinpoltime= (0.d0, 0.d0)
-     numatime = (0.d0, 0.d0)
-     numb1time= (0.d0, 0.d0)
-     numdtime = (0.d0, 0.d0)
-     numb2time= (0.d0, 0.d0)
-     !$omp parallel do default(none), &
-     !$omp private(a,b,ab, isiti), &
-     !$omp shared(dim,denvec,numa, numb1, numb2, numd,w, spinpol, nsiti, nso), &
-     !$omp reduction(+:numatime, numb1time, numb2time, numdtime, entime , spinpoltime)
-     do a = 1,dim
-        entime = entime + denvec(a+dim*(a-1))*w(a)
-        do b = 1,dim
-           ab = b + dim * (a-1)
-           numatime = numatime + denvec(ab)*numa(b,a)
-           numb1time = numb1time + denvec(ab)*numb1(b,a)
-           numb2time = numb2time + denvec(ab)*numb2(b,a)
-           numdtime = numdtime + denvec(ab)*numd(b,a)
-           spinpoltime = spinpoltime + denvec(ab)*spinpol(b,a)
+     numtime = (0.d0, 0.d0)
+     local_numtime =  (0.d0, 0.d0)
 
-        enddo
-     enddo
+  
+!!$     !$omp parallel default(none) private(a,b,c,ab,local_numtime) &
+!!$     !$omp shared(dim,denvec,num,w,spinpol,nso) &
+!!$     !$omp reduction(+:entime,spinpoltime)
+!!$     do a = 1, dim
+!!$        entime = entime + denvec(a + dim*(a-1)) * w(a)
+!!$        do b = 1, dim
+!!$           ab = b + dim * (a-1)
+!!$           spinpoltime = spinpoltime + denvec(ab) * spinpol(b,a)
+!!$           do c = 1, nso
+!!$              local_numtime(b) = local_numtime(b) + denvec(ab) * num(b,a,c)
+!!$           end do
+!!$        end do
+!!$     end do
+!!$     !$omp end parallel
+!!$     
+!!$     ! Inizio con local_numtime azzerato
+!!$     local_numtime(:) = 0.0
+
+     !$omp parallel do default(shared) private(a,b,c,ia,ab) &
+     !$omp reduction(+:entime, spinpoltime, local_numtime)
+     do a = 1, dim
+
+        ! elemento diagonale (a,a)
+        entime = entime + denvec(a + dim*(a-1)) * w(a)
+
+        do b = 1, dim
+           ab = b + dim*(a-1)
+           spinpoltime = spinpoltime + denvec(ab) * spinpol(b,a)
+
+           do c = 1, nso
+              local_numtime(c) = local_numtime(c) + denvec(ab) * num(b,a,c)
+           end do
+        end do
+     end do
      !$omp end parallel do
 
- 
-     write(993,'(<1>(f15.5,2x),<6>(f20.16,2x))') time,real(entime), real(spinpoltime), real(numdtime), real(numb1time), real(numb2time), real(numatime)
+     ! Somma finale
+     numtime(:) = numtime(:) + local_numtime(:)
 
+     
+     write(993,'(<1>(f15.5,2x),<nso+2>(f20.16,2x))') time,real(entime), real(spinpoltime), (real(numtime(i)), i = 1, nso)
 !!! end compute properties
 
      time = time + dt
+
   end do
   close(991)
   close(992)
