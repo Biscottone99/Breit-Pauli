@@ -1,0 +1,17 @@
+300.d0  !temp (K)
+0.0d0	!eta
+0.15    !cutoff (eV) 
+0.01d0    !dt (fs)
+1d3    !nt
+40      !nkrylov
+F	!psflag
+0.00d0	!pstreshold
+F	!blflag
+D	!spectralflag
+2	!number_operator
+
+
+
+
+!1d-3    !gamma (fs^-1)
+
