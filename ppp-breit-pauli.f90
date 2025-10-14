@@ -10,12 +10,13 @@ program vb
   logical :: PPPflag, hubbardflag, SOCflag, bool, gslabel, SOCtot, SOCzflag, SOCmono
   complex*16,allocatable::hamm2(:,:), hamm(:,:), hamz(:,:), hamp(:,:), hamp2(:,:), coupx(:,:), coupy(:,:), coupz(:,:), soox(:,:), sooy(:,:), sooz(:,:), ssox(:,:), ssoy(:,:), ssoz(:,:)
   complex*16, allocatable:: coupx_r(:,:), coupy_r(:,:), coupz_r(:,:), soox_r(:,:), sooy_r(:,:), sooz_r(:,:), ssox_r(:,:), ssoy_r(:,:), ssoz_r(:,:), socx_r(:,:), socy_r(:,:), socz_r(:,:)
-  character(1) :: jobz, uplo, hopflag
+  character(1) :: jobz, uplo
+  character(3) :: hopflag
   character(1), allocatable :: state(:)
   character(10),allocatable:: LABEL(:)
   real*8,allocatable:: ss22(:), sorted(:), vec_out(:),  molt(:), moltmag(:), ordine(:),  hopping_so(:,:), hopping(:,:),dipole(:,:), hop_donor(:,:), hop_acceptor(:,:), hopdr(:,:), hopar(:,:)
   complex*16,allocatable::mat_out(:,:),v1(:), v2(:), sz(:,:), szrot(:,:), num(:,:,:), num_rot(:,:,:), EIG(:), psi0(:), sdr(:,:), muz(:,:), muzrot(:,:),tempo(:)
-  complex*16,allocatable:: hop_rot(:,:), hop_cplx(:,:), muy(:,:), muyrot(:,:),mux(:,:), muxrot(:,:), spinpol(:,:), temp_inp(:,:), temp_out(:,:)
+  complex*16,allocatable:: hop_rot(:,:), hop_cplx(:,:), muy(:,:), muyrot(:,:),mux(:,:), muxrot(:,:), spinpol(:,:), temp_inp(:,:), temp_out(:,:), denmat(:,:)
   !=========================CONSTANTS===========================================================================================================================================================================
   imag = cmplx(0.0, 1.0)
   unit = cmplx(1.0, 0.0)
@@ -65,7 +66,7 @@ program vb
      write(11,'(I, 2x, 3(f10.5, 2x))') i, coord(i, 1), coord(i, 2), coord(i, 3)
   end do
   close(2)
-    ! Computing the distance matrix
+  ! Computing the distance matrix
   do i = 1, nsiti
      do j = 1, nsiti
         r(i, j) = dsqrt((coord(i, 1) - coord(j, 1))**2 + &
@@ -99,7 +100,7 @@ program vb
      read(1,*) basis(i)
   enddo
   close(1)
-!Ho appena letto la base
+  !Ho appena letto la base
   allocate(utility(dim))
 
   call sz_on_conf(dim, nso, basis, utility)
@@ -130,34 +131,34 @@ program vb
   allocate(sq(dim,dim), sz(dim,dim))
   call s2_realspace(dim, nso, basis, sz, sq)
   !Sulla base ho calcolato l'operatore numero, la spin pol, le cariche, sz e s2
-    !====================START MAKING THE OPERATOR FOR DYNAMIC==================================================================================================================================================
-  allocate(hopping(nsiti,nsiti))
-  hopping=0d0
-  hopping(1,2)=t*0.1d0
-  hopping(2,1)=t*0.1d0
+  !====================START MAKING THE OPERATOR FOR DYNAMIC==================================================================================================================================================
+!!$  allocate(hopping(nsiti,nsiti))
+!!$  hopping=0d0
+!!$  hopping(1,2)=t*0.1d0
+!!$  hopping(2,1)=t*0.1d0
+!!$
+!!$  allocate(hopping_so(nso,nso),hop_donor(dim,dim))
+!!$  hopping_so = 0d0
+!!$  hop_donor=0d0
+!!$  call op_siti_2_so(hopping_so, hopping, nso, nsiti)
+!!$  call sq_oe_op_real(nso, dim, hopping_so, hop_donor, basis)
+!!$  !Ho Definito la matrice di hopping tra il sito 1 e 2 e tra 3 e 4 per la dinamica e l'ho calcolato sulla base RS
+!!$  !FINISHED HOPPING FROM DONOR TO B1
+!!$  hopping=0d0
+!!$  hopping(nsiti-1,nsiti)=t*0.1d0
+!!$  hopping(nsiti,nsiti-1)=t*0.1d0
+!!$  allocate(hop_acceptor(dim,dim))
+!!$  hopping_so = 0d0
+!!$  hop_acceptor=0d0
+!!$  call op_siti_2_so(hopping_so, hopping, nso, nsiti)
+!!$  call sq_oe_op_real(nso, dim, hopping_so, hop_acceptor, basis)
+!!$  deallocate(hopping,hopping_so)
+!!$  call  check_hermitian(HOP_acceptor*unit, dim, bool)
+!!$  if(.not.bool)write(*,*) 'Problem hop acceptor'
+!!$  call  check_hermitian(hop_donor*unit, dim, bool)
+!!$  if(.not.bool)write(*,*) 'Problem hop donor'
+!!$  !FINISHED HOPPING B2 TO DONOR
 
-  allocate(hopping_so(nso,nso),hop_donor(dim,dim))
-  hopping_so = 0d0
-  hop_donor=0d0
-  call op_siti_2_so(hopping_so, hopping, nso, nsiti)
-  call sq_oe_op_real(nso, dim, hopping_so, hop_donor, basis)
-  !Ho Definito la matrice di hopping tra il sito 1 e 2 e tra 3 e 4 per la dinamica e l'ho calcolato sulla base RS
-  !FINISHED HOPPING FROM DONOR TO B1
-  hopping=0d0
-  hopping(nsiti-1,nsiti)=t*0.1d0
-  hopping(nsiti,nsiti-1)=t*0.1d0
-  allocate(hop_acceptor(dim,dim))
-  hopping_so = 0d0
-  hop_acceptor=0d0
-  call op_siti_2_so(hopping_so, hopping, nso, nsiti)
-  call sq_oe_op_real(nso, dim, hopping_so, hop_acceptor, basis)
-  deallocate(hopping,hopping_so)
-  call  check_hermitian(HOP_acceptor*unit, dim, bool)
-  if(.not.bool)write(*,*) 'Problem hop acceptor'
-  call  check_hermitian(hop_donor*unit, dim, bool)
-  if(.not.bool)write(*,*) 'Problem hop donor'
-  !FINISHED HOPPING B2 TO DONOR
-  
   !=========================START WRITING THE HAMILTONIAN=======================================================================================================================================================
   allocate( eigenvalue(dim),hamiltonian(dim,dim),pot(dim),hop(dim,dim),dipole(dim,3), muz(dim,dim), mux(dim,dim), muy(dim,dim))
   if(hubbardflag)call site_energy_u(nso, dim, esite, u, basis, pot)
@@ -167,18 +168,28 @@ program vb
   allocate(hop_use(nsiti, nsiti))
   do i = 1, nsiti
      do j = 1, nsiti
-        if(hopflag.eq.'E')then
+        if(hopflag.eq.'NCE')then
            if((i.eq.1).or.(i.eq.nsiti).or.(j.eq.1).or.(j.eq.nsiti))then
               if(i.ne.j)hop_use(i, j) = 0.1*t * dexp(length - r(i,j))
            else
               if(i.ne.j)hop_use(i, j) = t * dexp(length - r(i,j))
            endif
         endif
+        if(hopflag.eq.'E')then
+           if(i.ne.j)hop_use(i, j) = t * dexp(length - r(i,j))
+        endif
         if(hopflag.eq.'D')then
            if(i.ne.j)hop_use(i, j) = t * 10d0**(length - r(i,j))
         endif
         if(hopflag.eq.'N')then
            if( (dabs(r(i,j)-length).le.1d-4).and.(i.ne.j))hop_use(i,j)=t
+        endif
+        if(hopflag.eq.'NCN')then
+           if((i.eq.1).or.(i.eq.nsiti).or.(j.eq.1).or.(j.eq.nsiti))then
+             if( (dabs(r(i,j)-length).le.1d-4).and.(i.ne.j)) hop_use(i,j)= 0.1*t
+           else
+              if( (dabs(r(i,j)-length).le.1d-4).and.(i.ne.j)) hop_use(i,j)= t 
+           endif
         endif
      end do
   end do
@@ -191,7 +202,7 @@ program vb
   call op_siti_2_so(hop_so, hop_use, nso, nsiti)
   call sq_oe_op_real(nso, dim, hop_so, hop, basis)
   !Calcolo la parte off-diagonal
-!==============================================================================================================================================================================================================
+  !==============================================================================================================================================================================================================
   call dipole_moment(dipole, charges, coord, dim, nsiti)
   muz=0d0
   mux=0d0
@@ -205,12 +216,12 @@ program vb
   allocate(soc(dim, dim))
   soc = 0.0d0
   if (SOCflag) then
-    
+
      allocate(coupx(dim,dim), coupy(dim,dim), coupz(dim,dim))
      allocate(soox(dim,dim), sooy(dim,dim), sooz(dim,dim))
      allocate(ssox(dim,dim), ssoy(dim,dim), ssoz(dim,dim))
 
-    
+
      allocate(coup_mono(dim, dim), sso(dim, dim), soo(dim, dim))
      if(soctot.or.soczflag.or.socmono)call compute_soc_mono(nsiti, dim, nz, coord, hop_use, basis, pf, coup_mono, coupx,coupy, coupz)
      if(SOCtot.or.SOCzflag)call compute_sso(nsiti, dim, coord, hop_use, basis, pf, sso, ssox, ssoy, ssoz)
@@ -232,7 +243,8 @@ program vb
            write(12, '(I,2x, I, 2x, 10(f10.5, 2x))') i, j, dreal(coup_mono(i,j))*8065.54,dimag(coup_mono(i,j))*8065.54, dreal(soo(i,j))*8065.54,&
                 dimag(soo(i,j))*8065.54, dreal(sso(i,j))*8065.54,dimag(sso(i,j))*8065.54, dreal(soc(i,j))*8065.54,dimag(soc(i,j))*8065.54
            if(zabs(soc(i,j)*8065.54).ge.1d-4)write(13,'(I,2x, I, 2x, 10(f10.5, 2x))') basis(i),basis(j), dreal(coup_mono(i,j))*8065.54,&
-                dimag(coup_mono(i,j))*8065.54, dreal(soo(i,j))*8065.54,dimag(soo(i,j))*8065.54, dreal(sso(i,j))*8065.54,dimag(sso(i,j))*8065.54, dreal(soc(i,j))*8065.54,dimag(soc(i,j))*8065.54
+                dimag(coup_mono(i,j))*8065.54, dreal(soo(i,j))*8065.54,dimag(soo(i,j))*8065.54, dreal(sso(i,j))*8065.54,dimag(sso(i,j))*8065.54, &
+                dreal(soc(i,j))*8065.54,dimag(soc(i,j))*8065.54
 
         enddo
      end do
@@ -273,6 +285,7 @@ program vb
   call rotate_cplx_2x2(dim, sqrot, sq, hamiltonian)
   call rotate_cplx_2x2(dim, szrot, sz, hamiltonian)
   call rotate_cplx_2x2(dim, muzrot, muz, hamiltonian)
+  
   call rotate_cplx_2x2(dim, muyrot, muy, hamiltonian)
   call rotate_cplx_2x2(dim, muxrot, mux, hamiltonian)
   allocate(temp_inp(dim,dim), temp_out(dim,dim))
@@ -286,32 +299,32 @@ program vb
   call rotate_cplx_2x2(dim, sdr, spinpol, hamiltonian)
 
 
-  allocate(hopdr(dim,dim), hopar(dim,dim))
-  hopdr=0d0
-  hopar=0d0
-  call rotate_real_2x2(dim, hopar, hop_acceptor, hamiltonian)
-  call rotate_real_2x2(dim, hopdr, hop_donor, hamiltonian)
-  
-  
+!!$  allocate(hopdr(dim,dim), hopar(dim,dim))
+!!$  hopdr=0d0
+!!$  hopar=0d0
+!!$  call rotate_real_2x2(dim, hopar, hop_acceptor, hamiltonian)
+!!$  call rotate_real_2x2(dim, hopdr, hop_donor, hamiltonian)
+
+
   allocate(hop_cplx(dim,dim), hop_rot(dim,dim))
   hop_cplx=0d0
   hop_cplx = hop*unit
   call rotate_cplx_2x2(dim, hop_rot, hop_cplx, hamiltonian)
   deallocate(hop, hop_cplx)
 
-  deallocate(muy, mux, sz, sq,num, hop_acceptor, hop_donor)
+  deallocate(muy, mux, sz, sq,num)!, hop_acceptor, hop_donor)
   write(11,*)
   write(11,*) 'EIGENVALUES'
   do i = 1, dim
      write(11,'(I2, 2x, <3>(f17.10, 2x))') i, eigenvalue(i), dreal(sqrot(i,i)), dreal(szrot(i,i))
   enddo
-  
+
   write(11,*)
   write(11,*) 'CHARGES'
   do i = 1, dim
      write(11,'(I2, 2x, <10>(f10.5, 2x), A)') i, eigenvalue(i), dreal(sqrot(i,i)), (carica(i,j), j = 1, nsiti)
   enddo
-  
+
   write(11,*)
   write(11,*) 'NUMBERS'
   do i = 1, dim
@@ -321,29 +334,20 @@ program vb
   write(11,*) 'TRANSITION DIPOLE MOMENT'
   write(11,*) 'In order: x, y, z'
   do i = 2, dim
-    if((zabs(muxrot(1,i)).ge.1d-5).or.(zabs(muyrot(1,i)).ge.1d-5).or.(zabs(muzrot(1,i)).ge.1d-5)) write(11,'(I2, 4x, <nso>(f10.5, 2x))') i, zabs(muxrot(1,i))**2, zabs(muyrot(1,i))**2, zabs(muzrot(1,i))**2
+     if((zabs(muxrot(1,i)).ge.1d-5).or.(zabs(muyrot(1,i)).ge.1d-5).or.(zabs(muzrot(1,i)).ge.1d-5)) write(11,'(I2, 4x, <nso>(f10.5, 2x))') i, zabs(muxrot(1,i))**2, zabs(muyrot(1,i))**2, zabs(muzrot(1,i))**2
   enddo
 
   write(11,*)
   write(11,*) 'SPIN-DENSITY'
-  
+
   do i = 1, dim
      write(11,'(I2, 2x, <3>(f10.5, 2x),E10.2)') i, eigenvalue(i), dreal(sqrot(i,i)), dreal(szrot(i,i)),(dreal(sdr(i,i)))
   enddo
 
   !=========================REDFIELD===========================================================================================================================================================================
-  dimred = nstate
-  allocate(eig(dim), psi0(dim))
-!!$  state1 =  binary_search(basis, 135, 1, dim)
-!!$  state2 =  binary_search(basis, 75, 1, dim)
-!!$  state1 =  binary_search(basis, 45, 1, dim)
-!!$  state2 =  binary_search(basis, 30, 1, dim)
-!!$  write(*,*) state1, state2
-!!$  psi0=0
-!!$  do i=2,dim
-!!$     psi0(i)=(1/dsqrt(2d0))*(hamiltonian(state1,i)-hamiltonian(state2,i))
-!!$  enddo
+  allocate(psi0(dim))
   do i = 1, dim
+    ! psi0(i)=muzrot(1,i) !sbagliato
      psi0(i)=muzrot(i,1)
   enddo
   norm=0.d0
@@ -353,75 +357,95 @@ program vb
   psi0=psi0/dsqrt(norm)
   temp=0d0
 
-  dimred = 1
-  do i = 1, dim
-     if(zabs(psi0(i))**2.ge.1d-3)dimred=i
-  enddo
-  dimred = dim
-  write(*,*) dimred
+ 
   temp = 0d0
-  do i = 1,dimred
+  do i = 1,dim
      temp = temp + zabs(psi0(i))**2 * eigenvalue(i)
   enddo
   write(*,*) 'Energy (eV)=', temp
   temp = 0d0
-  do i = 1,dimred
+  do i = 1,dim
      temp = temp + zabs(psi0(i))*sdr(i,i)
   enddo
   write(*,*) 'Spin density=', temp
+  allocate(denmat(dim,dim))
+  !normalization
+  temp = 0.d0
+  do i = 1,dim
+     temp = temp + dconjg(psi0(i))*psi0(i)
+  end do
+  temp = dsqrt(temp)
+  psi0 = psi0/temp
 
-  
+  !writing the density matrix at t=0
+  denmat = (0.d0,0.d0)
+  do i = 1,dim
+     do j = 1,dim
+        denmat(i,j) = dconjg(psi0(i))*psi0(j)
+     end do
+  end do
+  open(66,file='denmat.dat')
+  do i = 1, dim
+     do j = 1, dim
+        write(66,*) i,j,denmat(i,j)
+     enddo
+  enddo
   if(.not.gslabel)then
-     open(66,file='input-red/spin-density.bin',form="unformatted")
-     write(66) sdr(2:dimred,2:dimred)
+     open(66,file='unitary/rho.bin',form="unformatted", access='stream')
+     write(66) denmat(2:dim,2:dim)
      close(66)
-     open(66,file='input-red/eigen.bin',form="unformatted")
-     write(66) eigenvalue(2:dimred)
+     open(66,file='unitary/spin-density.bin',form="unformatted", access='stream')
+     write(66) sdr(2:dim,2:dim)
      close(66)
-     open(88,file='input-red/psi0.bin',form="unformatted")
-     write(88) psi0(2:dimred)
-     close(88)
-     open(99,file='input-red/num.bin',form="unformatted")
-     write(99) num_rot(1:dimred,1:dimred,:)
-     close(99)
-     open(99,file='input-red/op1.bin',form="unformatted")
-     write(99) hopdr(2:dimred,2:dimred)*unit
-     close(99)
-     open(99,file='input-red/op2.bin',form="unformatted")
-     write(99) hopar(2:dimred,2:dimred)*unit
-     close(99)
+     open(66,file='unitary/eigen.bin',form="unformatted", access='stream')
+     write(66) eigenvalue(2:dim)
+     close(66)
+!!$     open(88,file='unitary/psi0.bin',form="unformatted")
+!!$     write(88) psi0(2:dim)
+!!$     close(88)
+!!$     open(99,file='unitary/num.bin',form="unformatted")
+!!$     write(99) num_rot(2:dim,2:dim,:)
+!!$     close(99)
+!!$     open(99,file='unitary/op1.bin',form="unformatted")
+!!$     write(99) hopdr(2:dim,2:dim)*unit
+!!$     close(99)
+!!$     open(99,file='unitary/op2.bin',form="unformatted")
+!!$     write(99) hopar(2:dim,2:dim)*unit
+!!$     close(99)
 
-     open(55,file='input-red/system_input.dat')
-     write(55,*) dimred-1
-     write(55,*) nsiti
+!!$     open(55,file='unitary/system_input.dat')
+!!$     write(55,*) dim-1
+!!$     write(55,*) nsiti
   endif
 
- 
-  
+
+
   if(gslabel)then
-     open(66,file='input-red/spin-density.bin',form="unformatted")
-     write(66) sdr(1:dimred,1:dimred)
+     open(66,file='unitary/rho.bin',form="unformatted", access='stream')
+     write(66) denmat
      close(66)
-     open(66,file='input-red/eigen.bin',form="unformatted")
-     write(66) eigenvalue(1:dimred)
+     open(66,file='unitary/spin-density.bin',form="unformatted", access='stream')
+     write(66) sdr(1:dim,1:dim)
      close(66)
-     open(88,file='input-red/psi0.bin',form="unformatted")
-     write(88) psi0(1:dimred)
-     close(88)
-     open(99,file='input-red/num.bin',form="unformatted")
-     write(99) num_rot(1:dimred,1:dimred,:)
+     open(66,file='unitary/eigen.bin',form="unformatted", access='stream')
+     write(66) eigenvalue(1:dim)
+     close(66)
+!!$     open(88,file='unitary/psi0.bin',form="unformatted")
+!!$     write(88) psi0(1:dim)
+!!$     close(88)
+!!$     open(99,file='unitary/num.bin',form="unformatted")
+!!$     write(99) num_rot(1:dim,1:dim,:)
+!!$     close(99)
+!!$     open(99,file='unitary/op1.bin',form="unformatted")
+!!$     write(99) hopdr(1:dim,1:dim)*unit
+!!$     close(99)
+!!$     open(99,file='unitary/op2.bin',form="unformatted")
+!!$     write(99) hopar(1:dim,1:dim)*unit
      close(99)
-
-     open(99,file='input-red/op1.bin',form="unformatted")
-     write(99) hopdr(1:dimred,1:dimred)*unit
-     close(99)
-     open(99,file='input-red/op2.bin',form="unformatted")
-     write(99) hopar(1:dimred,1:dimred)*unit
-     close(99)
-
-     open(55,file='input-red/system_input.dat')
-     write(55,*) dimred
-     write(55,*) nsiti
+!!$
+!!$     open(55,file='unitary/system_input.dat')
+!!$     write(55,*) dim
+!!$     write(55,*) nsiti
   endif
 
   write(11,*)
