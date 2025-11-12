@@ -1,0 +1,11 @@
+4	!nsiti
+4.0	!lenght
+1.0	!t-hopping
+1	!Diagonal type "0 Hubbard, 1 PPP"
+1	!SOC_mono
+1   !SOC_bi
+1   !Type of hopping "1: nearest neighbor, 2: exponential decay, 3: inchoerent exponential"
+6.d0	-4.0	1
+6.d0	-0.0d0	1
+6.d0	+0.0d0	1
+6.d0	4.0d0	1
