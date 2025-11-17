@@ -1,103 +1,635 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-def plot_heatmap_real(matrice, name):
-    plt.imshow(matrice, cmap='viridis', origin='upper')
-    plt.colorbar(label='Valore')
-    plt.title(name)
-    plt.xlim(0.5, matrice.shape[1] - 0.5)
-    plt.ylim(matrice.shape[0] - 0.5, 0.5)  # inverti asse y per mantenere "origin='upper'"
-    plt.xlabel('Colonna')
-    plt.ylabel('Riga')
-    plt.show()
+import numpy as np
+import os
 
-def plot_heatmap_cplx(matrice, nome):
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-    A = np.real(matrice)
-    B = np.imag(matrice)
-    im1 = axes[0].imshow(A, cmap='viridis', origin='upper')
-    axes[0].set_title("Real")
-    plt.colorbar(im1, ax=axes[0], fraction=0.046, pad=0.04)
+import plotting_module as plot
 
-    # Seconda heatmap
-    im2 = axes[1].imshow(B, cmap='plasma', origin='upper')
-    axes[1].set_title("Imaginary")
-    plt.colorbar(im2, ax=axes[1], fraction=0.046, pad=0.04)
-    fig.suptitle(nome)
-    # Layout ordinato
-    plt.tight_layout()
-    plt.show()
-def plot_geom(coords, charges):
+imag = 1j
+me = 9.1093837015e-31
+gs = 2.00231930436256
+e = 1.602176634e-19
+e0 = 8.8541878128e-12
+cl = 299792458
+pf = ((gs * e ** 2) / (8 * np.pi * e0 * me * cl ** 2)) * 10.0e10
+pauli_matrix = np.zeros((2, 2, 3), dtype=complex)
+pauli_matrix[0, 1, 0] = 1.0
+pauli_matrix[1, 0, 0] = 1.0
+
+pauli_matrix[0, 1, 1] = -imag
+pauli_matrix[1, 0, 1] = imag
+
+pauli_matrix[0, 0, 2] = 1.0
+pauli_matrix[1, 1, 2] = -1.0
+
+
+def generate_basis(electrons):
     """
-    Visualizza sfere 3D colorate in base alla carica e collegate in sequenza.
+    Generate basis states in bit representation, arranged in order of increasing spin.
 
-    Parameters
-    ----------
-    coords : array-like, shape (N, 3)
-        Coordinate cartesiane dei punti.
-    charges : array-like, shape (N,)
-        Valori di carica (usati per il colore).
+    Args:
+        electrons (int): Number of electrons.
+
+    Returns:
+        configs (np.array): configurazioni in forma intera
+        spins (np.array): spin associati
+        nf (int): numero di configurazioni generate
     """
-    coords = np.asarray(coords)
-    charges = np.asarray(charges)
-    n = len(charges)
+    # ==== Parametri ====
+    nso = electrons * 2  # numero di spinorbitali
 
-    # Colori in base alla carica
-    cmap = plt.cm.coolwarm
-    norm = plt.Normalize(vmin=np.min(charges), vmax=np.max(charges))
-    colors = cmap(norm(charges))
+    # ==== Limiti del ciclo ====
+    n_max = sum(2 ** i for i in range(nso - electrons, nso))
+    n_min = sum(2 ** i for i in range(electrons))
 
-    # Figura 3D
-    fig = plt.figure(figsize=(8, 7))
-    ax = fig.add_subplot(111, projection='3d')
+    nf = 0
+    usefull = []
 
-    # Sfere (scatter 3D)
-    ax.scatter(coords[:, 0], coords[:, 1], coords[:, 2],
-               s=800, c=colors, edgecolor='k', alpha=0.9)
+    # ==== Loop principale ====
+    for n in range(n_min, n_max + 1):
+        count = 0
+        a = 0  # spin-up
+        b = 0  # spin-down
+        array = ['0'] * nso
 
-    # Etichette (numero d’ordine dentro la sfera)
-    for i, (x, y, z) in enumerate(coords):
-        ax.text(x, y, z, str(i + 1), color='black',
-                ha='center', va='center', fontsize=10, weight='bold')
+        for i in range(nso):
+            if (n >> i) & 1:
+                array[i] = '1'
+                count += 1
+                if i % 2 == 0:
+                    a += 1
+                else:
+                    b += 1
 
-    # Collega solo la sfera i con i+1
-    for i in range(n - 1):
-        x_line = [coords[i, 0], coords[i + 1, 0]]
-        y_line = [coords[i, 1], coords[i + 1, 1]]
-        z_line = [coords[i, 2], coords[i + 1, 2]]
-        ax.plot(x_line, y_line, z_line, color='gray', linewidth=2)
+        spin = 0.5 * (a - b)
 
-    # Impostazioni grafiche
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    ax.set_box_aspect([1, 1, 1])  # rapporti uguali
-    plt.tight_layout()
-    plt.show()
+        if count == electrons:
+            config = sum(2 ** i for i in range(nso) if array[i] == '1')
+            usefull.append((config, spin, ''.join(array)))
+            nf += 1
 
-def plot_curve(x, y, name, xlabel, ylabel):
+    print(f"Numero totale di configurazioni valide: {nf}")
+
+    # ==== Ordinamento per spin crescente ====
+    usefull_sorted = sorted(usefull, key=lambda x: x[1])
+
+    # ==== Creazione cartella se manca ====
+    folder = '../hubbard_soc'
+    os.makedirs(folder, exist_ok=True)
+
+    # ==== Stampa su file ====
+    with open(os.path.join(folder, 'configurations.txt'), 'w') as f3:
+        for config, spin, array in usefull_sorted:
+            f3.write(f"{array}  spin={spin:+.1f}  config={config}\n")
+
+    # ==== Array NumPy da restituire ====
+    configs = np.array([u[0] for u in usefull_sorted])
+    spins = np.array([u[1] for u in usefull_sorted])
+
+    return configs, spins, nf
+
+
+def btest(n, i):
+    return ((n >> i) & 1) == 1
+def ibset(n, i):
+    return n | (1 << i)
+def ibclr(n, i):
+    return n & ~(1 << i)
+
+def linear_search(arr, val):
     """
-    Plotta una curva 2D con etichette e titolo.
+    Cerca un valore in una lista non ordinata.
 
-    Parameters
-    ----------
-    x : array-like
-        Dati per l'asse x.
-    y : array-like
-        Dati per l'asse y.
-    name : str
-        Titolo del grafico.
-    xlabel : str
-        Etichetta dell'asse x.
-    ylabel : str
-        Etichetta dell'asse y.
+    Args:
+        arr (list): Lista in cui cercare.
+        val: Valore da cercare.
+
+    Returns:
+        int: indice del valore se trovato, -1 altrimenti.
     """
-    plt.figure(figsize=(8, 6))
-    plt.plot(x, y, linestyle='-', color='b', linewidth=3)
-    plt.title(name)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.grid(True)
-    plt.tight_layout()
-    plt.xlim(np.min(x), np.max(x))
-    plt.show()
+    for i, v in enumerate(arr):
+        if v == val:
+            return i
+    return -1
+def tb_to_rs(dim, nso, basis, op_tb):
+    op = np.zeros((dim, dim), dtype=complex)
+    for j in range(dim):  # indice di colonna
+        for iso in range(nso):  # creation operator index
+            for jso in range(nso):  # annihilation operator index
+                jstate = basis[j]
+                if btest(jstate, jso):
+                    istate = ibclr(jstate, jso)
+                    if not btest(istate, iso):
+                        istate = ibset(istate, iso)
+                        i = linear_search(basis, istate)
+                        if i != -1:
+                            # Calcolo fase
+                            if jso != iso:
+                                step = 1 if iso > jso else -1
+                                conta = 0
+                                for a in range(jso + step, iso, step):
+                                    if btest(istate, a):
+                                        conta += 1
+                                phase = 1 if conta % 2 == 0 else -1
+                            else:
+                                phase = 1
+                            # Aggiornamento matrice
+                            op[i, j] += phase * op_tb[iso, jso]
+    return op
+def read_input(filename="input.inp", outputfile="output.txt"):
+    """
+    Legge i dati da un file di input (stile Fortran) e li scrive su un file di output.
+    Ritorna un dizionario con tutti i dati letti.
+    """
+    with open(filename, "r") as f:
+        lines = [line.strip() for line in f if line.strip()]
+
+    # === Lettura variabili scalari ===
+    nsiti = int(lines[0].split('#')[0].strip())
+    length = float(lines[1].split('#')[0].strip())  # Å
+    t = float(lines[2].split('#')[0].strip())  # eV
+    PPPflag = int(lines[3].split('#')[0].strip())
+    mono_flag = int(lines[4].split('#')[0].strip())
+    bi_flag = int(lines[5].split('#')[0].strip())
+    hop_flag = int(lines[6].split('#')[0].strip())
+    deltat = int(lines[7].split('#')[0].strip())
+    points = int(lines[8].split('#')[0].strip())
+    # === Alloca array ===
+    u = np.zeros(nsiti)
+    esite = np.zeros(nsiti)
+    nz = np.zeros(nsiti, dtype=int)
+    coord = np.zeros((nsiti, 3))
+
+    # === Lettura per-sito ===
+    for i in range(nsiti):
+        parts = lines[9 + i].split()
+        u[i] = float(parts[0])
+        esite[i] = float(parts[1])
+        nz[i] = int(parts[2])
+
+    # === Scrittura su file di output ===
+    with open(outputfile, "w") as out:
+        out.write(f"Numero siti: {nsiti}\n")
+        out.write(f"Lunghezza (Å): {length}\n")
+        out.write(f"t (eV): {t}\n")
+        out.write(f"Diagonal type: {PPPflag}\n")
+        out.write(f"mono_flag: {mono_flag}\n")
+        out.write(f"bi_flag: {bi_flag}\n")
+        out.write(f"hopping flag: {hop_flag}\n\n")
+        out.write(f"$\Delta$t (fs): {deltat}\n\n")
+        out.write("=== Parametri per ogni sito ===\n")
+        out.write("  i        u(i)        esite(i)      nz(i)\n")
+        for i in range(nsiti):
+            out.write(f"{i + 1:3d}  {u[i]:10.5f}  {esite[i]:10.5f}  {nz[i]:3d}\n")
+
+    print(f"\n✅ Input letto da '{filename}' e scritto in '{outputfile}'")
+
+    # === Ritorna i dati come dizionario (utile per altre parti del codice) ===
+    return {
+        "nsiti": nsiti,
+        "length": length,
+        "t": t,
+        "PPPflag": PPPflag,
+        "mono_flag": mono_flag,
+        "bi_flag": bi_flag,
+        "u": u,
+        "esite": esite,
+        "nz": nz,
+        "coord": coord,
+        "hop_flag": hop_flag,
+        "deltat": deltat,
+        "points": points,
+    }
+def hubbard_diagonal(nsiti, dimension, basis, esite, u):
+    """Generate the diagonal part of the Hubbard Hamiltonian.
+               Args:
+                nso (int): Number of spin orbitals.
+                dimension (int): Dimension of the basis.
+                basis (array): Array of basis states in bit representation.
+                esite (array): On-site energies.
+                u (array): Hubbard U values for each site.
+
+            Returns:
+                H (array): Hamiltonian 2D array but with only diagonal elements filled.
+            """
+    H = np.zeros((dimension, dimension), dtype=complex)
+    for i in range(dimension):
+        occupazioni = np.zeros(nsiti)
+        for j in range(nsiti):
+            bool_bit_up = (basis[i] >> (2 * j)) & 1
+            occupazioni[j] += bool_bit_up
+            bool_bit_down = (basis[i] >> (2 * j + 1)) & 1
+            occupazioni[j] += bool_bit_down
+
+        # Inter-site Coulomb interactions
+        H[i, i] += occupazioni @ esite
+        for j in range(nsiti):
+            if occupazioni[j] == 2:
+                H[i, i] += u[j]
+    return H
+def ppp_diagonal(dimension, coord, nsiti, esite, u, nz, basis):
+    """Generate the diagonal part of the PPP Hamiltonian.
+           Args:
+            dimension (int): Dimension of the basis.
+            coord (array): Coordinates of the sites.
+            nsiti (int): Number of sites.
+            esite (array): On-site energies.
+            u (array): Hubbard U values for each site.
+            nz (array): Number of electrons per site.
+            basis (array): Array of basis states in bit representation.
+
+        Returns:
+            H (array): Hamiltonian 2D array but with only diagonal elements filled.
+        """
+    H = np.zeros((dimension, dimension), dtype=complex)
+    for i in range(dimension):
+        occupazioni = np.zeros(nsiti)
+        for j in range(nsiti):
+            bool_bit_up = (basis[i] >> (2 * j)) & 1
+            occupazioni[j] += bool_bit_up
+            bool_bit_down = (basis[i] >> (2 * j + 1)) & 1
+            occupazioni[j] += bool_bit_down
+
+        # Inter-site Coulomb interactions
+        H[i, i] += occupazioni @ esite
+        for j in range(nsiti):
+            if occupazioni[j] == 2:
+                H[i, i] += u[j]
+        for j in range(nsiti - 1):
+            for k in range(j + 1, nsiti):
+                dist = np.linalg.norm(coord[j] - coord[k])
+                vij = 14.397 / dist  # eV·Å
+                ppp = (28.794 / (u[k] + u[j]) ** 2) * (nz[j] - occupazioni[j]) * (nz[k] - occupazioni[k])
+                H[i, i] += (vij + ppp)
+    return H
+def hopping_matrix(nsiti, t, length, hop_flag, geom):
+    """
+    Generate the hopping matrix for the system.
+
+    Args:
+        nsiti (int): Number of sites.
+        t (float): Hopping parameter.
+        length (float): Length of the system.
+        hop_flag (int): Flag to determine hopping type.
+        geom (ndarray): Array of atomic coordinates, shape (nsiti, 3).
+
+    Returns:
+        hopping (ndarray): (2*nsiti, 2*nsiti) hopping matrix.
+    """
+    hop = np.zeros((nsiti, nsiti))
+    distances = np.zeros((nsiti, nsiti))
+
+    # --- Calcolo delle distanze ---
+    for i in range(nsiti):
+        for j in range(nsiti):
+            if i != j:
+                dist = np.linalg.norm(geom[i] - geom[j])
+                distances[i, j] = dist
+    # --- Costruzione matrice hop in base al flag ---
+    if hop_flag == 1:
+        for i in range(nsiti):
+            for j in range(nsiti):
+                if distances[i, j] <= 1.001 * length and i != j:
+                    hop[i, j] = t
+
+    elif hop_flag == 2:
+        for i in range(nsiti):
+            for j in range(nsiti):
+                if distances[i, j] <= length and i != j:
+                    hop[i, j] = t * np.exp(length - distances[i, j])
+
+    elif hop_flag == 3:
+        for i in range(nsiti):
+            for j in range(nsiti):
+                if (i == 2 and j == 3) or (i == 3 and j == 2):
+                    hop[i, j] = t
+                else:
+                    hop[i, j] = 0.1 * t
+
+    elif hop_flag == 4:
+        for i in range(nsiti):
+            for j in range(nsiti):
+                if (i == 2 and j == 3) or (i == 3 and j == 2):
+                    hop[i, j] = t * np.exp(length - distances[i, j])
+                else:
+                    hop[i, j] = 0.1 * t * np.exp(length - distances[i, j])
+    # --- Espansione nella matrice completa 2*nsiti x 2*nsiti ---
+    hopping = np.zeros((2 * nsiti, 2 * nsiti))
+    for i in range(2 * nsiti):
+        for j in range(2 * nsiti):
+            if i % 2 == j % 2:  # stessi "spin" o sottolivelli
+                hopping[i, j] = hop[i // 2, j // 2]
+            else:
+                hopping[i, j] = 0.0
+
+    return hopping
+def is_hermitian(H, tol=1e-12):
+    return np.allclose(H, H.conj().T, atol=tol)
+def hopping_siti_matrix(coord, nsiti, hop_flag, length, t):
+    hop = np.zeros((nsiti, nsiti))
+    distances = np.zeros((nsiti, nsiti))
+
+    # --- Calcolo delle distanze ---
+    for i in range(nsiti):
+        for j in range(nsiti):
+            if i != j:
+                dist = np.linalg.norm(coord[i] - coord[j])
+                distances[i, j] = dist
+    # --- Costruzione matrice hop in base al flag ---
+    if hop_flag == 1:
+        for i in range(nsiti):
+            for j in range(nsiti):
+                if distances[i, j] <= 1.001 * length and i != j:
+                    hop[i, j] = t
+
+    elif hop_flag == 2:
+        for i in range(nsiti):
+            for j in range(nsiti):
+                if distances[i, j] <= length and i != j:
+                    hop[i, j] = t * np.exp(length - distances[i, j])
+
+    elif hop_flag == 3:
+        for i in range(nsiti):
+            for j in range(nsiti):
+                if i == 1  or j == 1 or i == nsiti or j == nsiti:
+                    hop[i, j] = 0.1 * t
+                else:
+                    hop[i, j] = t
+
+    elif hop_flag == 4:
+        for i in range(nsiti):
+            for j in range(nsiti):
+                if i == 1  or j == 1 or i == nsiti or j == nsiti:
+                    hop[i, j] = 0.1 * t * np.exp(length - distances[i, j])
+                else:
+                    hop[i, j] = t * np.exp(length - distances[i, j])
+
+    return hop
+def rotate_matrix(op, eigenvectors, strati, dimension):
+    """
+    Rotates operator 'op' in the eigenvector basis.
+
+    Args:
+        op: (dim, dim) operator matrix
+        eigenvectors: (dim, dim) eigenvectors
+        strati: number of layers (int)
+        dimension: dimension of the system (int)
+
+    Returns:
+        op_rotated: (dim, dim, strati) rotated operator
+    """
+    # Crea array 3D per il risultato
+    if strati != 1:
+        op_rotated = np.zeros((dimension, dimension, strati), dtype=complex)
+
+        # Rotazione: op_rotated[:,:,s] = V^dagger @ op @ V
+        for s in range(strati):
+            op_rotated[:, :, s] = np.conj(eigenvectors.T) @ op[:, :, s] @ eigenvectors
+    else:
+        op_rotated = np.zeros((dimension, dimension), dtype=complex)
+        op_rotated = np.conj(eigenvectors.T) @ op @ eigenvectors
+
+    return op_rotated
+def compute_soc_mono(basis, coord, nsiti, hop_flag, length, t):
+    hop = hopping_siti_matrix(coord, nsiti, hop_flag, length, t)
+    mom = np.zeros((nsiti, nsiti, 3), dtype=complex)
+    for i in range(nsiti):
+        for j in range(nsiti):
+            for k in range(3):
+                dr = coord[i, k] - coord[j, k]
+                mom[i, j, k] = imag * dr * hop[i, j]
+
+    soc_mono = np.zeros((2 * nsiti, 2 * nsiti), dtype=complex)
+
+    for i in range(2 * nsiti):
+        sitoi = i // 2
+        for j in range(2 * nsiti):
+            sitoj = j // 2
+            for atomo in range(nsiti):
+                if (atomo != sitoj) and (atomo != sitoi):
+                    term1 = np.cross(coord[sitoi] - coord[atomo], mom[sitoi, sitoj]) / np.linalg.norm(
+                        coord[sitoi] - coord[atomo]) ** 3
+                    term2 = np.cross(coord[sitoj] - coord[atomo], mom[sitoi, sitoj]) / np.linalg.norm(
+                        coord[sitoj] - coord[atomo]) ** 3
+                    if i % 2 == 0:
+                        si = 0
+                    else:
+                        si = 1
+                    if j % 2 == 0:
+                        sj = 0
+                    else:
+                        sj = 1
+                    soc_mono[i, j] = pf * 0.5 * (term1 + term2) @ pauli_matrix[si, sj, :]
+
+    one_electron_soc = tb_to_rs(len(basis), 2 * nsiti, basis, soc_mono)
+    return one_electron_soc
+def bielectron(basis, nso, op):
+    """
+    Costruisce la matrice dell'operatore bielettronico su una base determinante.
+    basis : lista di determinanti (bitstring interi)
+    nso   : numero di spinorbitali
+    op    : tensore bielettronico (a,b,c,d) con convenzione ⟨ab|cd⟩
+    """
+    dim = len(basis)
+    op_rs = np.zeros((dim, dim), dtype=complex)
+
+    for n, det_n in enumerate(basis):
+        # ciclo su indici dell'operatore a_a† a_b† a_c a_d
+        for a in range(nso):
+            for b in range(nso):
+                for c in range(nso):
+                    for d in range(nso):
+                        # controlla se c e d sono occupati nel determinante di partenza
+                        if btest(det_n, d) and btest(det_n, c):
+                            # rimuovi d, c
+                            temp = ibclr(ibclr(det_n, d), c)
+
+                            # controlla se a e b sono vuoti
+                            if not btest(temp, a) and not btest(temp, b):
+                                # aggiungi b, a
+                                temp2 = ibset(ibset(temp, b), a)
+
+                                # calcola la fase da permutazione fermionica
+                                perm = 0
+                                for i in range(min(a, b) + 1, max(a, b)):
+                                    if btest(temp, i):
+                                        perm += 1
+                                for i in range(min(c, d) + 1, max(c, d)):
+                                    if btest(det_n, i):
+                                        perm += 1
+                                phase = 1 if perm % 2 == 0 else -1
+
+                                # trova l'indice m del nuovo determinante
+                                m = linear_search(basis, temp2)
+                                if m != -1:
+                                    op_rs[m, n] += phase * op[a, b, c, d]
+
+    return op_rs
+def compute_sso(basis, coord, nsiti, hop_flag, length, t):
+    hop = hopping_siti_matrix(coord, nsiti, hop_flag, length, t)
+    mom = np.zeros((nsiti, nsiti, 3), dtype=complex)
+    for i in range(nsiti):
+        for j in range(nsiti):
+            for k in range(3):
+                dr = coord[i, k] - coord[j, k]
+                mom[i, j, k] = imag * dr * hop[i, j]
+
+    soc_bi = np.zeros((2 * nsiti, 2 * nsiti, 2 * nsiti, 2 * nsiti), dtype=complex)
+
+    for a in range(2 * nsiti):
+        for b in range(2 * nsiti):
+            for c in range(2 * nsiti):
+                asito = a // 2
+                bsito = b // 2
+                csito = c // 2
+                if asito != bsito and bsito != csito:
+                    term1 = np.cross(coord[asito] - coord[bsito], mom[asito, csito]) / np.linalg.norm(
+                        coord[asito] - coord[bsito]) ** 3
+                    term2 = np.cross(coord[csito] - coord[bsito], mom[asito, csito]) / np.linalg.norm(
+                        coord[csito] - coord[bsito]) ** 3
+                    if a % 2 == 0:
+                        sa = 0
+                    else:
+                        sa = 1
+                    if c % 2 == 0:
+                        sc = 0
+                    else:
+                        sc = 1
+                    soc_bi[a, b, c, b] += pf * 0.5 * (term1 + term2) @ pauli_matrix[sa, sc, :]
+    two_electron_soc = bielectron(basis, 2 * nsiti, soc_bi)
+    return two_electron_soc
+def compute_soo(basis, coord, nsiti, hop_flag, length, t):
+    hop = hopping_siti_matrix(coord, nsiti, hop_flag, length, t)
+    mom = np.zeros((nsiti, nsiti, 3), dtype=complex)
+    for i in range(nsiti):
+        for j in range(nsiti):
+            for k in range(3):
+                dr = coord[i, k] - coord[j, k]
+                mom[i, j, k] = imag * dr * hop[i, j]
+
+    soc_bi = np.zeros((2 * nsiti, 2 * nsiti, 2 * nsiti, 2 * nsiti), dtype=complex)
+
+    for a in range(2 * nsiti):
+        for b in range(2 * nsiti):
+            for c in range(2 * nsiti):
+                for d in range(2 * nsiti):
+                    asito = a // 2
+                    bsito = b // 2
+                    csito = c // 2
+                    dsito = d // 2
+                    if a % 2 == 0:
+                        sa = 0
+                    else:
+                        sa = 1
+                    if b % 2 == 0:
+                        sb = 0
+                    else:
+                        sb = 1
+                    if c % 2 == 0:
+                        sc = 0
+                    else:
+                        sc = 1
+                    if d % 2 == 0:
+                        sd = 0
+                    else:
+                        sd = 1
+                    if sa == sc and bsito == dsito:
+                        if asito != bsito and csito != bsito:
+                            term1 = np.cross(coord[asito] - coord[bsito], mom[asito, csito]) / np.linalg.norm(coord[asito] - coord[bsito]) ** 3
+                            term2 = np.cross(coord[csito] - coord[bsito], mom[asito, csito]) / np.linalg.norm(coord[csito] - coord[bsito]) ** 3
+                            soc_bi[a, b, c, d] += pf * (term1 + term2) @ pauli_matrix[sb, sd, :]
+
+    two_electron_soc = bielectron(basis, 2 * nsiti, soc_bi)
+    return two_electron_soc
+
+def apply_annihilation(state, i):
+    """Applica c_i sul determinante. Ritorna (new_state, phase) oppure (None, 0) se annulla."""
+    if not btest(state, i):
+        return None, 0  # stato vuoto → annulla
+    # segno = (-1)^(numero elettroni prima del sito i)
+    phase = (-1)**(bin(state & ((1 << i)-1)).count("1"))
+    new_state = ibclr(state, i)
+    return new_state, phase
+
+def apply_creation(state, i):
+    """Applica c_i^† sul determinante. Ritorna (new_state, phase) oppure (None, 0)."""
+    if btest(state, i):
+        return None, 0  # già occupato → annulla
+    phase = (-1)**(bin(state & ((1 << i)-1)).count("1"))
+    new_state = ibset(state, i)
+    return new_state, phase
+
+def spin_matrices(configs, nso):
+    """
+    Costruisce S_z, S^+, S^-, S^2 usando operatori scaletta in base di configurazioni.
+    """
+    # 🔧 fix: configs deve essere una lista per usare .index()
+    configs = list(configs)
+
+    dim = len(configs)
+
+    Sz = np.zeros((dim, dim), complex)
+    Sp = np.zeros((dim, dim), complex)
+    Sm = np.zeros((dim, dim), complex)
+    S2 = np.zeros((dim, dim), complex)
+
+    # ----------------------------
+    #     S_z (diagonale)
+    # ----------------------------
+    for a, state in enumerate(configs):
+        n_up = 0
+        n_down = 0
+        for i in range(0, nso, 2):
+            if btest(state, i):     n_up += 1
+            if btest(state, i+1):   n_down += 1
+        Sz[a, a] = 0.5 * (n_up - n_down)
+
+    # ----------------------------
+    #     S^+ = sum_i c†_{i↑} c_{i↓}
+    # ----------------------------
+    for a, state in enumerate(configs):
+        for site in range(nso // 2):
+            down = 2*site + 1
+            up   = 2*site
+
+            state2, ph1 = apply_annihilation(state, down)
+            if state2 is None:
+                continue
+
+            state3, ph2 = apply_creation(state2, up)
+            if state3 is None:
+                continue
+
+            try:
+                b = configs.index(state3)
+                Sp[b, a] += ph1 * ph2
+            except ValueError:
+                pass
+
+    # ----------------------------
+    #     S^- = sum_i c†_{i↓} c_{i↑}
+    # ----------------------------
+    for a, state in enumerate(configs):
+        for site in range(nso // 2):
+            down = 2*site + 1
+            up   = 2*site
+
+            state2, ph1 = apply_annihilation(state, up)
+            if state2 is None:
+                continue
+
+            state3, ph2 = apply_creation(state2, down)
+            if state3 is None:
+                continue
+
+            try:
+                b = configs.index(state3)
+                Sm[b, a] += ph1 * ph2
+            except ValueError:
+                pass
+
+    # ----------------------------
+    #     S^2 = S^- S^+ + S_z(S_z + 1)
+    # ----------------------------
+    S2 = Sm @ Sp + Sz @ (Sz + np.identity(dim))
+
+    return Sz, S2
