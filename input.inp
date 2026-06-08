@@ -1,0 +1,17 @@
+4	#nsiti
+4.0	#lenght
+36  #angolo
+2   #pitch
+1.0	#t-hopping
+0	#Diagonal type "0 Hubbard, 1 PPP"
+1	#SOC_mono
+1   #SOC_bi
+1   #multiply_factor
+1   #Type of hopping "1: nearest neighbor, 2: exponential decay, 3: inchoerent exponential"
+1000 #deltat
+10000 #points
+0   #dynamic_flag "0: no, 1: si"
+10.0	-4.0	2
+10.0	-0.0	1
+10.0	+0.0	1
+10.0	4.00	0
